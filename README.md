@@ -17,6 +17,6 @@ sensor, and an Atmel ATMEGA328P MCU.
 
 Designed and released into the public domain by Jon Sowman - March 2012.  
 
-Modified my Matt Brejza for FM telemetry testing
+Modified by Matt Brejza for FM telemetry testing
 
 [Contact CUSF](mailto:contact@cusf.co.uk)
