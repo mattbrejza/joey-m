@@ -37,6 +37,31 @@ uint8_t EEMEM step[50] = {4, 7, 11, 15, 19, 23, 28, 32, 37, 42, 47, 52, 57,
     154, 160, 165, 171, 177, 182, 188, 193, 198, 203, 208, 213, 218, 223, 227, 
     232, 236, 240, 244, 248, 251};
 
+#define SIN_LEN 256	
+const static uint8_t sin_table[SIN_LEN] = {128, 131, 134, 137, 140, 143, 146,
+	149, 152, 155, 158, 161, 164, 167, 170, 173, 176, 178, 181, 184, 187, 189, 
+	192, 195, 197, 200, 202, 205, 207, 209, 212, 214, 216, 218, 220, 222, 224, 
+	226, 228, 230, 231, 233, 235, 236, 238, 239, 240, 242, 243, 244, 245, 246, 
+	247, 248, 249, 249, 250, 250, 251, 251, 252, 252, 252, 252, 252, 252, 252, 
+	252, 252, 251, 251, 250, 250, 249, 249, 248, 247, 246, 245, 244, 243, 242, 
+	240, 239, 238, 236, 235, 233, 231, 230, 228, 226, 224, 222, 220, 218, 216, 
+	214, 212, 209, 207, 205, 202, 200, 197, 195, 192, 189, 187, 184, 181, 178, 
+	176, 173, 170, 167, 164, 161, 158, 155, 152, 149, 146, 143, 140, 137, 134, 
+	131, 128, 125, 122, 119, 116, 113, 110, 107, 104, 101, 98, 95, 92, 89, 86, 
+	83, 81, 78, 75, 72, 70, 67, 64, 62, 59, 57, 54, 52, 49, 47, 45, 43, 40, 38, 
+	36, 34, 32, 30, 28, 27, 25, 23, 22, 20, 19, 17, 16, 15, 13, 12, 11, 10, 9, 
+	8, 8, 7, 6, 6, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 6, 6, 7, 8, 8, 9, 10, 
+	11, 12, 13, 15, 16, 17, 19, 20, 22, 23, 25, 27, 28, 30, 32, 34, 36, 38, 40, 
+	43, 45, 47, 49, 52, 54, 57, 59, 62, 64, 67, 70, 72, 75, 78, 81, 83, 86, 89, 
+	92, 95, 98, 101, 104, 107, 110, 113, 116, 119, 122, 125};
+
+#define FREQ_HIGH 3
+#define FREQ_LOW 2	
+	
+volatile uint8_t sin_phase;
+volatile uint8_t sin_phase_inc = FREQ_HIGH;
+
+
 /**
  * Initialise the radio subsystem including the dual 16 bit 
  * DAC.
@@ -74,6 +99,9 @@ void radio_init(void)
 
     // Do not interrupt on overflow for now
     TIMSK2 &= ~(_BV(TOIE2));
+	
+	//now turn on interrupts :P
+	TIMSK2 |= _BV(TOIE2);
 
     // Turn off the DAC
     _radio_dac_off();
@@ -215,7 +243,18 @@ void _radio_transition(uint16_t target)
  */
 void _radio_transmit_bit(uint8_t data, uint8_t ptr)
 {
+	#if RADIO_FM > 0
     if(ptr == 0)
+        sin_phase_inc = FREQ_LOW; //_radio_transition(0);
+    else if(ptr >= 1 && ptr <= 8)
+        if( (data >> (ptr - 1)) & 1 )
+            sin_phase_inc = FREQ_HIGH; //_radio_transition(_radio_shift);
+        else
+            sin_phase_inc = FREQ_LOW; //_radio_transition(0);
+    else
+        sin_phase_inc = FREQ_HIGH; //_radio_transition(_radio_shift);
+	#else
+	if(ptr == 0)
         _radio_transition(0);
     else if(ptr >= 1 && ptr <= 8)
         if( (data >> (ptr - 1)) & 1 )
@@ -224,6 +263,7 @@ void _radio_transmit_bit(uint8_t data, uint8_t ptr)
             _radio_transition(0);
     else
         _radio_transition(_radio_shift);
+	#endif
 }
 
 /**
@@ -287,6 +327,12 @@ ISR(TIMER0_COMPA_vect)
  */
 ISR(TIMER2_OVF_vect)
 {
+	#if RADIO_FM > 0
+	sin_phase += sin_phase_inc;
+	
+	_radio_dac_write(RADIO_FINE, ((uint16_t)sin_table[sin_phase]) << 8);
+	#else
+	/*	
     if( sample < DSP_SAMPLES )
     {
         int32_t d = _transition_delta * (int32_t)(eeprom_read_byte(&step[sample]));
@@ -299,4 +345,7 @@ ISR(TIMER2_OVF_vect)
         sample = 0;
         transition_complete = true;
     }
+	*/
+	#endif
+	
 }

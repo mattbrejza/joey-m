@@ -14,6 +14,9 @@
 DEVICE     = m328p
 CLOCK      = 16000000
 PROGRAMMER = -c avrispmkII -P usb -B 1
+PROG_ISP   = -c avrispmkII -P usb -B 5
+PROG_ASP   = -c usbasp
+PROG_232   = -c c232hm -B 5
 SOURCES	   = $(wildcard *.c)
 FUSES      = -U hfuse:w:0xd7:m -U lfuse:w:0xf7:m
 
@@ -21,6 +24,9 @@ FUSES      = -U hfuse:w:0xd7:m -U lfuse:w:0xf7:m
 
 OBJECTS = $(SOURCES:.c=.o)
 AVRDUDE = avrdude $(PROGRAMMER) -p $(DEVICE) -C /etc/avrdude.conf
+AVRDUDE_ASP = avrdude $(PROG_ASP) -p $(DEVICE)
+AVRDUDE_ISP = avrdude $(PROG_ISP) -p $(DEVICE)
+AVRDUDE_232 = avrdude $(PROG_232) -p $(DEVICE)
 
 # Disable warning of strict-aliasing since uIP type-puns
 COMPILE = avr-gcc -Wall -Os -fno-strict-aliasing -gdwarf-2 -std=gnu99 -Wl,-u,vfprintf -lprintf_flt -lm -DF_CPU=$(CLOCK) -mmcu=atmega328p
@@ -43,6 +49,16 @@ all:	main.hex
 
 flash:	all
 	$(AVRDUDE) -U flash:w:main.hex:i
+	
+flash_asp: all
+	$(AVRDUDE_ASP) -U flash:w:main.hex:i
+
+flash_isp: all
+	$(AVRDUDE_ISP) -U flash:w:main.hex:i
+	
+flash_232: all
+	$(AVRDUDE_232) -U flash:w:main.hex:i
+
 
 eeprom: all
 	$(AVRDUDE) -U eeprom:w:main.eep:i
