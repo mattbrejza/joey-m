@@ -32,6 +32,8 @@
 #define RADIO_CENTER_FREQ_434630    0X0C00
 #define RADIO_SHIFT_425             0x0900
 
+#define RADIO_FM 1
+
 #define DSP_SAMPLES     50
 #define DSP_OFFSET      0
 
