@@ -29,14 +29,15 @@
 
 #define RADIO_BAUD_50               156
 #define RADIO_BAUD_300              26
-#define RADIO_CENTER_FREQ_434630    0X0C00
+#define RADIO_CENTER_FREQ_434630    0XA000
 #define RADIO_SHIFT_425             0x0900
 
-#define RADIO_FM 1
 
 #define DSP_SAMPLES     50
 #define DSP_OFFSET      0
 
+void set_fsk(void);
+void set_afsk(void);
 void radio_init(void);
 void radio_enable(void);
 void radio_disable(void);
@@ -50,5 +51,6 @@ void radio_set_shift(uint16_t shift);
 void radio_set_baud(uint8_t baud);
 void _radio_transition(uint16_t target);
 void radio_chatter(void);
+void radio_transmit_sentence_binary(uint8_t* string, uint16_t bits);
 
 #endif /* __RADIO_H__ */

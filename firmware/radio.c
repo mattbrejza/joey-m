@@ -32,6 +32,12 @@ volatile uint8_t _txbyte = 0;
 volatile uint8_t _txptr = 0;
 volatile bool byte_complete = false;
 
+volatile uint16_t bits_remain = 0;
+volatile uint8_t *binary_seq;
+volatile uint8_t out_mask = 0x80;
+
+volatile uint8_t radio_mode = 0;   //0-fsk; 1-afsk
+
 uint8_t EEMEM step[50] = {4, 7, 11, 15, 19, 23, 28, 32, 37, 42, 47, 52, 57, 
     62, 67, 73, 78, 84, 90, 95, 101, 107, 113, 119, 125, 130, 136, 142, 148,
     154, 160, 165, 171, 177, 182, 188, 193, 198, 203, 208, 213, 218, 223, 227, 
@@ -61,6 +67,16 @@ const static uint8_t sin_table[SIN_HALF_LEN] = {128, 131, 134, 137, 140, 143, 14
 volatile uint8_t sin_phase;
 volatile uint8_t sin_phase_inc = FREQ_HIGH;
 
+
+void set_afsk()
+{
+	radio_mode = 1;	
+}
+
+void set_fsk()
+{
+	radio_mode = 0;	
+}
 
 /**
  * Initialise the radio subsystem including the dual 16 bit 
@@ -187,6 +203,34 @@ void radio_transmit_sentence(char* string)
     radio_transmit_string(cs);
 }
 
+void radio_transmit_sentence_binary(uint8_t* string, uint16_t bits)
+{
+    TIMSK2 |= _BV(TOIE2);
+	bits_remain = bits;
+	binary_seq = string;
+	out_mask = 0x80;
+	TIMSK0 |= _BV(OCIE0A);
+	while (bits_remain & 0xFF00);
+	while (bits_remain & 0x00FF);
+	//while(1)
+	//{
+	//	_delay_ms(10);
+	//	cli();
+	//	if (bits_remain == 0)
+	//		break;
+	//	sei();
+	//}
+	
+	while ( !( UCSR0A & (1<<UDRE0)) );
+	UDR0 = 'J';
+	while ( !( UCSR0A & (1<<UDRE0)) );
+	UDR0 = (bits_remain&0xFF) + 48;
+
+
+	//TIMSK0 &= ~(_BV(OCIE0A));
+
+}
+
 
 /**
  * Transmit a null terminated string over the radio link.
@@ -243,28 +287,32 @@ void _radio_transition(uint16_t target)
  */
 void _radio_transmit_bit(uint8_t data, uint8_t ptr)
 {
-	#if RADIO_FM > 0
-    if(ptr == 0)
-        sin_phase_inc = FREQ_LOW; //_radio_transition(0);
-    else if(ptr >= 1 && ptr <= 8)
-        if( (data >> (ptr - 1)) & 1 )
-            sin_phase_inc = FREQ_HIGH; //_radio_transition(_radio_shift);
-        else
-            sin_phase_inc = FREQ_LOW; //_radio_transition(0);
-    else
-        sin_phase_inc = FREQ_HIGH; //_radio_transition(_radio_shift);
-	#else
-	if(ptr == 0)
-        _radio_transition(0);
-    else if(ptr >= 1 && ptr <= 8)
-        if( (data >> (ptr - 1)) & 1 )
-            _radio_transition(_radio_shift);
-        else
-            _radio_transition(0);
-    else
-        _radio_transition(_radio_shift);
-	#endif
+	if (radio_mode){
+		if(ptr == 0)
+			sin_phase_inc = FREQ_LOW; //_radio_transition(0);
+		else if(ptr >= 1 && ptr <= 7)
+			if( (data >> (ptr - 1)) & 1 )
+				sin_phase_inc = FREQ_HIGH; //_radio_transition(_radio_shift);
+			else
+				sin_phase_inc = FREQ_LOW; //_radio_transition(0);
+		else
+			sin_phase_inc = FREQ_HIGH; //_radio_transition(_radio_shift);
+	}
+	else
+	{
+		if(ptr == 0)
+			_radio_dac_write(RADIO_FINE, (uint16_t)0); //_radio_transition(0);
+		else if(ptr >= 1 && ptr <= 7)
+			if( (data >> (ptr - 1)) & 1 )
+				_radio_dac_write(RADIO_FINE, (uint16_t)_radio_shift); //_radio_transition(_radio_shift);
+			else
+				_radio_dac_write(RADIO_FINE, (uint16_t)0); //_radio_transition(0);
+		else
+			_radio_dac_write(RADIO_FINE, (uint16_t)_radio_shift); //_radio_transition(_radio_shift);
+	}
 }
+
+
 
 /**
  * Calculate the checksum for the radio string excluding any $ signs
@@ -272,10 +320,14 @@ void _radio_transmit_bit(uint8_t data, uint8_t ptr)
  */
 uint16_t radio_calculate_checksum(char* data)
 {
-    uint16_t i;
+    uint16_t i = 0;
     uint16_t crc = 0xFFFF;
-
-    for (i = 0; i < strlen(data); i++) {
+   
+    
+    for (i=0; i < strlen(data); i++) {
+        if (data[i] == '$') break;
+    }
+    for (; i < strlen(data); i++) {
         if (data[i] != '$') crc = _crc_xmodem_update(crc,(uint8_t)data[i]);
     }
     return crc;
@@ -289,11 +341,11 @@ void radio_chatter(void)
 {
     _radio_dac_write(RADIO_FINE, 0x0000);
     _delay_ms(200);
-    _radio_dac_write(RADIO_FINE, _radio_shift);
+    _radio_dac_write(RADIO_FINE, 0xFFFF);
     _delay_ms(200);
     _radio_dac_write(RADIO_FINE, 0x0000);
     _delay_ms(200);
-    _radio_dac_write(RADIO_FINE, _radio_shift);
+    _radio_dac_write(RADIO_FINE, 0xFFFF);
     _delay_ms(200);
 }
 
@@ -309,14 +361,47 @@ ISR(TIMER0_COMPA_vect)
     }
     else
     {
-        if( _txptr < 11 )
-        {
-            _radio_transmit_bit(_txbyte, _txptr);
-            _txptr++;
-        } else {
-            TIMSK0 &= ~(_BV(OCIE0A));
-            byte_complete = true;
-        }
+		if (bits_remain > 0)   //binary protocol
+		{
+		
+			if (radio_mode){
+				if (*binary_seq & out_mask)
+					sin_phase_inc = FREQ_HIGH;
+				else
+					sin_phase_inc = FREQ_LOW;
+			}else{			
+				if (*binary_seq & out_mask)
+					_radio_transition(_radio_shift);
+				else
+					_radio_transition(0);
+			}
+			
+			if (*binary_seq & out_mask)
+				led_set(LED_RED, 1);
+			else
+				led_set(LED_RED, 0);
+				
+			out_mask >>= 1;
+			if (out_mask == 0)
+			{
+				out_mask = 0x80;
+				binary_seq++;
+				wdt_reset();
+			}
+			bits_remain--;
+		
+		}		
+		else    //rtty protocol
+		{
+			if( _txptr < 10 )
+			{
+				_radio_transmit_bit(_txbyte, _txptr);
+				_txptr++;
+			} else {
+				TIMSK0 &= ~(_BV(OCIE0A));
+				byte_complete = true;
+			}
+		} 
         systicks = 0;
     }
 }
@@ -328,30 +413,33 @@ ISR(TIMER0_COMPA_vect)
 ISR(TIMER2_OVF_vect)
 {
 
-	#if RADIO_FM > 0
-	sin_phase += sin_phase_inc;
-	if ( sin_phase >= SIN_FULL_LEN)	//this only works as i know it wont overflow as sin_phase_inc is 3 or 4
-		sin_phase -= SIN_FULL_LEN;
-		
-	if ( sin_phase >= SIN_HALF_LEN)
-		_radio_dac_write(RADIO_FINE, (uint16_t)(255-(sin_table[sin_phase-SIN_HALF_LEN])) << 8);
+	if (radio_mode)
+	{
+		sin_phase += sin_phase_inc;
+		if ( sin_phase >= SIN_FULL_LEN)	//this only works as i know it wont overflow as sin_phase_inc is 3 or 4
+			sin_phase -= SIN_FULL_LEN;
+			
+		if ( sin_phase >= SIN_HALF_LEN)
+			_radio_dac_write(RADIO_FINE, (uint16_t)(255-(sin_table[sin_phase-SIN_HALF_LEN])) << 8);
+		else
+			_radio_dac_write(RADIO_FINE, ((uint16_t)sin_table[sin_phase]) << 8);
+	}
 	else
-		_radio_dac_write(RADIO_FINE, ((uint16_t)sin_table[sin_phase]) << 8);
-	#else
+	{
 		
-    if( sample < DSP_SAMPLES )
-    {
-        int32_t d = _transition_delta * (int32_t)(eeprom_read_byte(&step[sample]));
-        d /= 256;
-        d += (int32_t)_transition_start;
-        _radio_dac_write(RADIO_FINE, (uint16_t)d);
-        sample++;
-    } else {
-        TIMSK2 &= ~(_BV(TOIE2));
-        sample = 0;
-        transition_complete = true;
-    }
+		if( sample < DSP_SAMPLES )
+		{
+			int32_t d = _transition_delta * (int32_t)(eeprom_read_byte(&step[sample]));
+			d /= 256;
+			d += (int32_t)_transition_start;
+			_radio_dac_write(RADIO_FINE, (uint16_t)d);
+			sample++;
+		} else {
+			TIMSK2 &= ~(_BV(TOIE2));
+			sample = 0;
+			transition_complete = true;
+		}
 	
-	#endif
+	}
 	
 }

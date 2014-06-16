@@ -17,7 +17,9 @@ PROGRAMMER = -c avrispmkII -P usb -B 1
 PROG_ISP   = -c avrispmkII -P usb -B 5
 PROG_ASP   = -c usbasp
 PROG_232   = -c c232hm -B 5
-SOURCES	   = $(wildcard *.c)
+INCDIR     = ../../turbohab/encoder/libturbohab
+INCDIR2    = ../../cmp
+SOURCES	   = $(wildcard *.c) $(wildcard ${INCDIR}/*.c) $(wildcard ${INCDIR2}/*.c) 
 FUSES      = -U hfuse:w:0xd7:m -U lfuse:w:0xf7:m
 
 # End configuration
@@ -28,8 +30,8 @@ AVRDUDE_ASP = avrdude $(PROG_ASP) -p $(DEVICE)
 AVRDUDE_ISP = avrdude $(PROG_ISP) -p $(DEVICE)
 AVRDUDE_232 = avrdude $(PROG_232) -p $(DEVICE)
 
-# Disable warning of strict-aliasing since uIP type-puns
-COMPILE = avr-gcc -Wall -Os -fno-strict-aliasing -gdwarf-2 -std=gnu99 -Wl,-u,vfprintf -lprintf_flt -lm -DF_CPU=$(CLOCK) -mmcu=atmega328p
+
+COMPILE = avr-gcc -Wall -Os -ffunction-sections -fdata-sections -gdwarf-2 -std=gnu99 -Wl,-u,vfprintf,-gc-sections -lprintf_flt -lm -DF_CPU=$(CLOCK) -I${INCDIR} -I${INCDIR2} -mmcu=atmega328p
 
 # symbolic targets:
 all:	main.hex
