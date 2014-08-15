@@ -30,7 +30,7 @@
 #define RADIO_BAUD_50               156
 #define RADIO_BAUD_300              26
 #define RADIO_CENTER_FREQ_434630    0XA000
-#define RADIO_SHIFT_425             0x0900
+#define RADIO_SHIFT_425             0x0A00
 
 
 #define DSP_SAMPLES     50
@@ -52,5 +52,7 @@ void radio_set_baud(uint8_t baud);
 void _radio_transition(uint16_t target);
 void radio_chatter(void);
 void radio_transmit_sentence_binary(uint8_t* string, uint16_t bits);
+void set_baud_50(void);
+void set_baud_300(void);
 
 #endif /* __RADIO_H__ */

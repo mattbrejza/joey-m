@@ -118,7 +118,7 @@ int main()
 	
     while(true)
     {
-        led_set(LED_GREEN, 1);
+        
 
         // Get the current system tick and increment
         uint32_t tick = eeprom_read_dword(&ticks) + 1;
@@ -127,9 +127,11 @@ int main()
         float temperature;
 		if (toggle == 0)
 		    temperature = temperature_read();
+            
+        led_set(LED_GREEN, 1);
 
         // Check that we're in airborne <1g mode
-        if( gps_check_nav() != 0x06 ) led_set(LED_RED, 1);
+      //  if( gps_check_nav() != 0x06 ) led_set(LED_RED, 1);
 
         // Get information from the GPS
         gps_check_lock(&lock, &sats);
@@ -146,12 +148,13 @@ int main()
         double lon_fmt = (double)lon / 10000000.0;
         alt /= 1000;
 
-		if (toggle==0) //rtty
+		if (1)//(toggle==0) //rtty
 		{
 			toggle = 1;
-			set_fsk();
+			set_afsk();
+            set_baud_50();
 		
-			sprintf(s, "UUUX$$JOEY,%lu,%02u:%02u:%02u,%02.7f,%03.7f,%ld,%.1f,%u,%x",
+			sprintf(s, "UUUX$$UKHAS14,%lu,%02u:%02u:%02u,%02.7f,%03.7f,%ld,%.1f,%u,%x",
 				tick, hour, minute, second, lat_fmt, lon_fmt, alt, temperature,
 				sats, lock);
 			s[3] = 0x80;  //null with 7n2
@@ -163,9 +166,10 @@ int main()
 		else  //binary
 		{
 			toggle++;
-			if (toggle > 3)
+			if (toggle > 0)
 				toggle = 0;
-			set_afsk();
+            set_baud_300();
+			//set_afsk();
 		
 			memset((void*)hb_buf,0,100);
 			memset((void*)hb_buf_out,0,300);
@@ -182,7 +186,7 @@ int main()
 			
 			
 			cmp_write_uint(&cmp, 0);
-			cmp_write_str(&cmp, "JOEY", 4);
+			cmp_write_str(&cmp, "UKHAS14", 9);
 			
 			cmp_write_uint(&cmp, 1);
 			cmp_write_uint(&cmp, tick);
@@ -206,7 +210,7 @@ int main()
 			//cmp_write_uint(&cmp, 120);
 		
 
-			uint16_t l = channel_encode(hb_buf,hb_buf_out,328,INT_C_328,3);
+			uint16_t l = channel_encode(hb_buf,hb_buf_out,376,INT_C_376,3);
 			
 			//snprintf(debug,100,"LEN: %d",l);
 			//TxStr(debug);
@@ -220,6 +224,8 @@ int main()
 		}
 
         led_set(LED_RED, 0);
+        if (tick>18000)
+            tick = 0;
         eeprom_update_dword(&ticks, tick);
         wdt_reset();
         //_delay_ms(500);

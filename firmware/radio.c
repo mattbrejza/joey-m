@@ -61,8 +61,8 @@ const static uint8_t sin_table[SIN_HALF_LEN] = {128, 131, 134, 137, 140, 143, 14
 	47, 49, 52, 54, 57, 59, 62, 65, 67, 70, 73, 76, 79, 82, 84, 87, 90, 93, 96, 99, 
 	103, 106, 109, 112, 115, 118, 121, 124}; */
 
-#define FREQ_HIGH 3
-#define FREQ_LOW 2	
+#define FREQ_HIGH 4
+#define FREQ_LOW 3	
 	
 volatile uint8_t sin_phase;
 volatile uint8_t sin_phase_inc = FREQ_HIGH;
@@ -107,7 +107,7 @@ void radio_init(void)
     TCCR0B |= _BV(CS02) | _BV(CS00);
 
     // Interrupt on compare match with OCR0A
-    OCR0A = 156;
+    set_baud_50();
 
     // Set up TIMER2 for the DSP (!) stuff
     // No clock prescale to get 62.5kHz sample rate with an 8 bit timer
@@ -124,6 +124,16 @@ void radio_init(void)
 
     // Enable global interrupts
     sei();
+}
+
+void set_baud_50(void)
+{
+    OCR0A = 156;
+}
+
+void set_baud_300(void)
+{
+    OCR0A = 25;
 }
 
 /**
@@ -371,15 +381,15 @@ ISR(TIMER0_COMPA_vect)
 					sin_phase_inc = FREQ_LOW;
 			}else{			
 				if (*binary_seq & out_mask)
-					_radio_transition(_radio_shift);
+					_radio_dac_write(RADIO_FINE, (uint16_t)_radio_shift); //_radio_transition(_radio_shift);
 				else
-					_radio_transition(0);
+					_radio_dac_write(RADIO_FINE, (uint16_t)0); //_radio_transition(0);
 			}
 			
-			if (*binary_seq & out_mask)
-				led_set(LED_RED, 1);
-			else
-				led_set(LED_RED, 0);
+			//if (*binary_seq & out_mask)
+			//	led_set(LED_RED, 1);
+			//else
+			//	led_set(LED_RED, 0);
 				
 			out_mask >>= 1;
 			if (out_mask == 0)
